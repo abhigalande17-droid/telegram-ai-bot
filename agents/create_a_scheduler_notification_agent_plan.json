@@ -1,0 +1,11 @@
+{
+  "name": "create_a_scheduler_notification_agent",
+  "tools": [
+    "Python standard library",
+    "argparse",
+    "json",
+    "threading",
+    "TelegramNotifier adapter"
+  ],
+  "workflow": "Create a scheduler notification agent that stores daily tasks with date and time in a local JSON file, checks for due tasks in the background, sends alerts, and exposes a notifier interface that can later integrate with a Telegram bot for mobile notifications"
+}

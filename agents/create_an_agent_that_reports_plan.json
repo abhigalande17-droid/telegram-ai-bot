@@ -1,0 +1,8 @@
+{
+  "name": "create_an_agent_that_reports",
+  "tools": [
+    "Python standard library",
+    "argparse"
+  ],
+  "workflow": "create an agent that reports the word count of text"
+}

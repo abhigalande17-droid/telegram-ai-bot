@@ -1,0 +1,8 @@
+{
+  "name": "create_an_agent_that_greets",
+  "tools": [
+    "Python standard library",
+    "argparse"
+  ],
+  "workflow": "create an agent that greets a user"
+}

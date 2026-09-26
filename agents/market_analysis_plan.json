@@ -1,0 +1,9 @@
+{
+  "name": "market_analysis",
+  "tools": [
+    "Python standard library",
+    "Frankfurter exchange-rate API",
+    "urllib.request"
+  ],
+  "workflow": "Fetch the current EUR/USD reference rate and print a concise market snapshot with a financial-advice disclaimer."
+}

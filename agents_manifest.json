@@ -1,0 +1,21 @@
+{
+    "system_version": "1.0.0",
+    "last_updated": "2026-09-25 16:25:57.383080",
+    "agents": {
+        "catalog_advisor": {
+            "version": "1.2.0",
+            "intelligence_tier": "standard",
+            "last_patch": "Enhanced context-awareness and faster reasoning patch"
+        },
+        "master_orchestrator": {
+            "version": "1.2.0",
+            "intelligence_tier": "standard",
+            "last_patch": "Enhanced context-awareness and faster reasoning patch"
+        },
+        "support_agent": {
+            "version": "1.2.0",
+            "intelligence_tier": "standard",
+            "last_patch": "Enhanced context-awareness and faster reasoning patch"
+        }
+    }
+}

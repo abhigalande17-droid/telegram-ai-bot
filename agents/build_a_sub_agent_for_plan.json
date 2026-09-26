@@ -1,0 +1,8 @@
+{
+  "name": "build_a_sub_agent_for",
+  "tools": [
+    "Python standard library",
+    "argparse"
+  ],
+  "workflow": "Build a sub-agent for this task: Fetch current EUR to USD forex rate and give me a quick market summary. The script must accept the complete task as a positional argument, perform the workflow, print only the final result, and support --self-test."
+}

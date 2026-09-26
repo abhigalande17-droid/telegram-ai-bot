@@ -1,0 +1,8 @@
+{
+  "name": "create_an_agent_that_formats",
+  "tools": [
+    "Python standard library",
+    "argparse"
+  ],
+  "workflow": "create an agent that formats a user's text as a short checklist"
+}

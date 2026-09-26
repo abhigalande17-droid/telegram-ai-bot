@@ -1,0 +1,11 @@
+{
+  "name": "create_an_agent_that_scrapes",
+  "tools": [
+    "Python standard library",
+    "argparse",
+    "urllib.request",
+    "html.parser",
+    "pathlib"
+  ],
+  "workflow": "Create an agent that scrapes the top 3 headlines from Hacker News and saves them to a text file"
+}
