@@ -1,3 +1,4 @@
 playwright
 langchain-ollama
 python-dotenv
+python-telegram-bot
