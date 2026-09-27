@@ -72,7 +72,7 @@ async def check_auth(update: Update) -> bool:
     user = update.effective_user
     if not user or user.id != ALLOWED_USER_ID:
         if update.message:
-            await update.message.reply_text("⛔ अनधिकृत एक्सेस: आपको अनुमति नहीं है।")
+            await update.message.reply_text("Maaf kijiye, aapko is bot ko access karne ki permission nahi hai.")
         return False
     return True
 
@@ -83,14 +83,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_conversations[user_id] = []
     save_memory(user_conversations)
     await update.message.reply_text(
-        "⚡ *Executive Super-Agent (Unrestricted & Ultra-HD) सक्रिय है!*\n\n"
-        "✨ **पावर्स:**\n"
-        "• 🌐 **Google Grounded Search:** लाइव और सटीक डेटा\n"
-        "• 🎨 **Flux Ultra 8K Image:** `/image <प्रॉम्प्ट>`\n"
-        "• 👁️ **Multimodal Vision:** फ़ोटो / दस्तावेज़ विश्लेषण\n"
-        "• 🎙️ **Voice Intelligence:** वॉइस मैसेज सपोर्ट\n"
-        "• 🔓 **Unrestricted Core:** बेरोकटोक और सटीक मार्गदर्शन",
-        parse_mode="Markdown"
+        "Executive Super-Agent active hai.\n\n"
+        "Commands & Powers:\n"
+        "- Google Live Search Grounding\n"
+        "- Ultra HD Image Render: /image <prompt>\n"
+        "- Vision Analysis: Send any Photo or Document\n"
+        "- Voice Processing: Send Voice Note\n"
+        "- Unrestricted direct responses",
     )
 
 async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -99,51 +98,50 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_prompt = " ".join(context.args) if context.args else ""
     if not user_prompt:
-        await update.message.reply_text("कृपया इमेज का विवरण दें।\nउदाहरण: `/image royal bridal sherwani with intricate zari embroidery`", parse_mode="Markdown")
+        await update.message.reply_text("Kripya image ka prompt dein. Example:\n/image royal designer ghagra suit on mannequin, boutique studio lighting, 8k resolution")
         return
 
-    status_msg = await update.message.reply_text("⚡ *प्रॉम्प्ट को 8K अल्ट्रा-डिटेल्ड में ऑप्टिमाइज़ किया जा रहा है...*", parse_mode="Markdown")
+    status_msg = await update.message.reply_text("Ultra-HD image generate ho rahi hai, kripya 10-15 seconds wait karein...")
     
     try:
-        refine_prompt = (
-            f"Convert this simple image idea into an ultra-detailed, professional 8K photorealistic image prompt: '{user_prompt}'. "
-            "Include exact lighting, camera lens details (e.g. 85mm f/1.4, cinematic studio lighting), realistic texture, ultra-high resolution. "
-            "Output ONLY the optimized prompt text without any explanations or intro."
-        )
-        refine_res = client.models.generate_content(
-            model=CURRENT_MODEL,
-            contents=refine_prompt
-        )
-        optimized_prompt = refine_res.text.strip() if refine_res and refine_res.text else user_prompt
+        # High quality cinematic keywords addition
+        enhanced_prompt = f"{user_prompt}, highly detailed, sharp focus, 8k resolution, professional studio photography, realistic textures"
+        encoded_prompt = urllib.parse.quote(enhanced_prompt)
         
-        await status_msg.edit_text("🎨 *Flux Ultra 8K रेंडर हो रहा है, कृपया कुछ सेकंड प्रतीक्षा करें...*", parse_mode="Markdown")
-        
-        encoded_prompt = urllib.parse.quote(optimized_prompt)
-        # Using Flux model for high clarity & sharpness
-        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1280&height=1280&model=flux&nologo=true&enhance=true"
+        # High resolution endpoint
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true&seed=101"
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         }
-        response = requests.get(image_url, headers=headers, timeout=90)
+        
+        # Server-side direct download to avoid Telegram URL fetch error
+        response = requests.get(image_url, headers=headers, timeout=60)
         
         if response.status_code == 200 and len(response.content) > 5000:
+            image_stream = io.BytesIO(response.content)
+            image_stream.name = "generated_image.jpg"
             await update.message.reply_photo(
-                photo=io.BytesIO(response.content),
-                caption=f"✨ **8K Ultra Render:**\n`{user_prompt}`",
-                parse_mode="Markdown"
+                photo=image_stream,
+                caption=f"Ultra Render:\n{user_prompt}"
             )
             await status_msg.delete()
         else:
-            await update.message.reply_photo(
-                photo=image_url,
-                caption=f"✨ **8K Ultra Render:**\n`{user_prompt}`",
-                parse_mode="Markdown"
-            )
-            await status_msg.delete()
-            
+            # Fallback to turbo model if flux times out
+            fallback_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=turbo&nologo=true"
+            fb_res = requests.get(fallback_url, headers=headers, timeout=40)
+            if fb_res.status_code == 200 and len(fb_res.content) > 5000:
+                image_stream = io.BytesIO(fb_res.content)
+                image_stream.name = "generated_image.jpg"
+                await update.message.reply_photo(
+                    photo=image_stream,
+                    caption=f"Ultra Render:\n{user_prompt}"
+                )
+                await status_msg.delete()
+            else:
+                await status_msg.edit_text("Image download nahi ho saki. Kripya thodi der baad dobara try karein.")
     except Exception as e:
-        await status_msg.edit_text(f"इमेज जनरेशन त्रुटि: {str(e)}")
+        await status_msg.edit_text(f"Image generation error: {str(e)}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_auth(update):
@@ -174,14 +172,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             contents=history_contents,
             config=config
         )
-        reply_text = response.text or "कोई प्रतिक्रिया नहीं मिली।"
+        reply_text = response.text or "Koi response nahi mila."
 
         user_conversations[user_id].append({"role": "user", "text": user_text})
         user_conversations[user_id].append({"role": "model", "text": reply_text})
         save_memory(user_conversations)
 
     except Exception as e:
-        reply_text = f"त्रुटि: {str(e)}"
+        reply_text = f"Error: {str(e)}"
 
     if len(reply_text) > 4000:
         for i in range(0, len(reply_text), 4000):
@@ -194,7 +192,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    caption = update.message.caption or "इस छवि का बारीक और गहरा विश्लेषण करें।"
+    caption = update.message.caption or "Is image ka deeply and clearly analysis karein."
 
     photo = update.message.photo[-1]
     photo_file = await photo.get_file()
@@ -211,9 +209,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             contents=[image, caption],
             config=config
         )
-        await update.message.reply_text(response.text or "इमेज का विश्लेषण पूरा हुआ।")
+        await update.message.reply_text(response.text or "Analysis complete.")
     except Exception as e:
-        await update.message.reply_text(f"विज़न त्रुटि: {str(e)}")
+        await update.message.reply_text(f"Vision error: {str(e)}")
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_auth(update):
@@ -232,15 +230,15 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         response = client.models.generate_content(
             model=CURRENT_MODEL,
-            contents=[audio_part, "इस ऑडियो संदेश को सुनकर बिना किसी रोक-टोक के सटीक उत्तर दें।"],
+            contents=[audio_part, "Is audio message ko samajhkar seedha and accurate answer dein."],
             config=config
         )
-        await update.message.reply_text(response.text or "ऑडियो प्रोसेस हो गया।")
+        await update.message.reply_text(response.text or "Audio process ho gaya.")
     except Exception as e:
-        await update.message.reply_text(f"वॉइस प्रोसेसिंग त्रुटि: {str(e)}")
+        await update.message.reply_text(f"Voice error: {str(e)}")
 
 if __name__ == '__main__':
-    print(f"Executive Super-Agent (Ultra-Sharp) Live... Model: {CURRENT_MODEL}")
+    print(f"Executive Super-Agent Live on {CURRENT_MODEL}")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
