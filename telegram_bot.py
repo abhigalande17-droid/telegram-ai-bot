@@ -1,6 +1,8 @@
 import os
 import json
 import io
+import urllib.parse
+import requests
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
@@ -39,7 +41,7 @@ def save_memory(data):
 
 user_conversations = load_memory()
 
-CURRENT_MODEL = "gemini-2.5-flash"
+CURRENT_MODEL = "gemini-2.0-flash"
 
 SYSTEM_INSTRUCTION = (
     "You are an elite, highly intelligent Executive AI Super-Agent. "
@@ -84,21 +86,15 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text("🎨 अल्ट्रा-एचडी इमेज रेंडर हो रही है, कृपया प्रतीक्षा करें...")
     
     try:
-        result = client.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt,
-            config=dict(
-                number_of_images=1,
-                aspect_ratio="1:1"
-            )
-        )
+        encoded_prompt = urllib.parse.quote(prompt)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&enhance=true"
+        response = requests.get(image_url, timeout=40)
         
-        if result.generated_images:
-            image_bytes = result.generated_images[0].image.image_bytes
-            await update.message.reply_photo(photo=io.BytesIO(image_bytes), caption=f"✨ `{prompt}`", parse_mode="Markdown")
+        if response.status_code == 200:
+            await update.message.reply_photo(photo=io.BytesIO(response.content), caption=f"✨ `{prompt}`", parse_mode="Markdown")
             await status_msg.delete()
         else:
-            await status_msg.edit_text("इमेज तैयार नहीं हो सकी। कृपया दूसरा प्रॉम्प्ट आज़माएँ।")
+            await status_msg.edit_text("इमेज तैयार नहीं हो सकी। कृपया दोबारा प्रयास करें।")
     except Exception as e:
         await status_msg.edit_text(f"इमेज जनरेशन त्रुटि: {str(e)}")
 
@@ -186,7 +182,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"वॉइस प्रोसेसिंग त्रुटि: {str(e)}")
 
 if __name__ == '__main__':
-    print("Executive Super-Agent स्टार्ट हो रहा है...")
+    print(f"Executive Super-Agent स्टार्ट हो रहा है... Active Model: {CURRENT_MODEL}")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
