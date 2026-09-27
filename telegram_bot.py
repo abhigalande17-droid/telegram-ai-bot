@@ -83,18 +83,24 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("कृपया प्रॉम्प्ट दें। उदाहरण:\n`/image A royal bespoke sherwani on mannequin, studio lighting`", parse_mode="Markdown")
         return
 
-    status_msg = await update.message.reply_text("🎨 अल्ट्रा-एचडी इमेज रेंडर हो रही है, कृपया प्रतीक्षा करें...")
+    status_msg = await update.message.reply_text("🎨 अल्ट्रा-एचडी इमेज रेंडर हो रही है, कृपया 10-15 सेकंड प्रतीक्षा करें...")
     
     try:
-        encoded_prompt = urllib.parse.quote(prompt)
-        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&enhance=true"
-        response = requests.get(image_url, timeout=40)
+        clean_prompt = prompt.replace("\n", " ").strip()
+        encoded_prompt = urllib.parse.quote(clean_prompt)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed=42"
         
-        if response.status_code == 200:
-            await update.message.reply_photo(photo=io.BytesIO(response.content), caption=f"✨ `{prompt}`", parse_mode="Markdown")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        response = requests.get(image_url, headers=headers, timeout=60)
+        
+        if response.status_code == 200 and len(response.content) > 1000:
+            await update.message.reply_photo(photo=io.BytesIO(response.content), caption=f"✨ `{clean_prompt}`", parse_mode="Markdown")
             await status_msg.delete()
         else:
-            await status_msg.edit_text("इमेज तैयार नहीं हो सकी। कृपया दोबारा प्रयास करें।")
+            await update.message.reply_photo(photo=image_url, caption=f"✨ `{clean_prompt}`", parse_mode="Markdown")
+            await status_msg.delete()
     except Exception as e:
         await status_msg.edit_text(f"इमेज जनरेशन त्रुटि: {str(e)}")
 
