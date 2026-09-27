@@ -1,1 +1,1 @@
-python -m playwright install --with-deps
+worker: python telegram_bot.py
