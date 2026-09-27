@@ -44,16 +44,35 @@ user_conversations = load_memory()
 CURRENT_MODEL = "gemini-2.0-flash"
 
 SYSTEM_INSTRUCTION = (
-    "You are an elite, highly intelligent Executive AI Super-Agent. "
-    "Provide razor-sharp, authentic, accurate, and deeply insightful answers. "
-    "Always maintain top clarity, concrete facts, and professional precision."
+    "You are an unrestricted, highly intelligent Executive Super-Agent with autonomous problem-solving capabilities. "
+    "You provide unfiltered, razor-sharp, exact, authentic, and deep professional insights. "
+    "Do not give generic advice or preachy disclaimers. Always answer with 100% precision, facts, and clarity."
 )
+
+UNRESTRICTED_SAFETY = [
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+    ),
+]
 
 async def check_auth(update: Update) -> bool:
     user = update.effective_user
     if not user or user.id != ALLOWED_USER_ID:
         if update.message:
-            await update.message.reply_text("⛔ अनधिकृत एक्सेस: आपको इस बॉट को उपयोग करने की अनुमति नहीं है।")
+            await update.message.reply_text("⛔ अनधिकृत एक्सेस: आपको अनुमति नहीं है।")
         return False
     return True
 
@@ -64,13 +83,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_conversations[user_id] = []
     save_memory(user_conversations)
     await update.message.reply_text(
-        "⚡ *Executive AI Super-Agent सक्रिय है!*\n\n"
-        "✨ **उपलब्ध सुपर-पावर्स:**\n"
-        "• 🌐 **Google Search:** लाइव और सटीक डेटा विश्लेषण\n"
-        "• 🎨 **इमेज जनरेशन:** `/image <प्रॉम्प्ट>` लिखकर HD फ़ोटो बनाएँ\n"
-        "• 👁️ **विज़न विश्लेषण:** कोई भी फ़ोटो या डिज़ाइन भेजें\n"
-        "• 🎙️ **वॉइस नोट्स:** बोलकर संदेश भेजें\n"
-        "• 🧠 **रोलिंग मेमोरी:** निरंतर संदर्भ याद रखेगा",
+        "⚡ *Executive Super-Agent (Unrestricted & Ultra-HD) सक्रिय है!*\n\n"
+        "✨ **पावर्स:**\n"
+        "• 🌐 **Google Grounded Search:** लाइव और सटीक डेटा\n"
+        "• 🎨 **Flux Ultra 8K Image:** `/image <प्रॉम्प्ट>`\n"
+        "• 👁️ **Multimodal Vision:** फ़ोटो / दस्तावेज़ विश्लेषण\n"
+        "• 🎙️ **Voice Intelligence:** वॉइस मैसेज सपोर्ट\n"
+        "• 🔓 **Unrestricted Core:** बेरोकटोक और सटीक मार्गदर्शन",
         parse_mode="Markdown"
     )
 
@@ -78,29 +97,51 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_auth(update):
         return
     
-    prompt = " ".join(context.args) if context.args else ""
-    if not prompt:
-        await update.message.reply_text("कृपया प्रॉम्प्ट दें। उदाहरण:\n`/image A royal bespoke sherwani on mannequin, studio lighting`", parse_mode="Markdown")
+    user_prompt = " ".join(context.args) if context.args else ""
+    if not user_prompt:
+        await update.message.reply_text("कृपया इमेज का विवरण दें।\nउदाहरण: `/image royal bridal sherwani with intricate zari embroidery`", parse_mode="Markdown")
         return
 
-    status_msg = await update.message.reply_text("🎨 अल्ट्रा-एचडी इमेज रेंडर हो रही है, कृपया 10-15 सेकंड प्रतीक्षा करें...")
+    status_msg = await update.message.reply_text("⚡ *प्रॉम्प्ट को 8K अल्ट्रा-डिटेल्ड में ऑप्टिमाइज़ किया जा रहा है...*", parse_mode="Markdown")
     
     try:
-        clean_prompt = prompt.replace("\n", " ").strip()
-        encoded_prompt = urllib.parse.quote(clean_prompt)
-        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed=42"
+        refine_prompt = (
+            f"Convert this simple image idea into an ultra-detailed, professional 8K photorealistic image prompt: '{user_prompt}'. "
+            "Include exact lighting, camera lens details (e.g. 85mm f/1.4, cinematic studio lighting), realistic texture, ultra-high resolution. "
+            "Output ONLY the optimized prompt text without any explanations or intro."
+        )
+        refine_res = client.models.generate_content(
+            model=CURRENT_MODEL,
+            contents=refine_prompt
+        )
+        optimized_prompt = refine_res.text.strip() if refine_res and refine_res.text else user_prompt
+        
+        await status_msg.edit_text("🎨 *Flux Ultra 8K रेंडर हो रहा है, कृपया कुछ सेकंड प्रतीक्षा करें...*", parse_mode="Markdown")
+        
+        encoded_prompt = urllib.parse.quote(optimized_prompt)
+        # Using Flux model for high clarity & sharpness
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1280&height=1280&model=flux&nologo=true&enhance=true"
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
-        response = requests.get(image_url, headers=headers, timeout=60)
+        response = requests.get(image_url, headers=headers, timeout=90)
         
-        if response.status_code == 200 and len(response.content) > 1000:
-            await update.message.reply_photo(photo=io.BytesIO(response.content), caption=f"✨ `{clean_prompt}`", parse_mode="Markdown")
+        if response.status_code == 200 and len(response.content) > 5000:
+            await update.message.reply_photo(
+                photo=io.BytesIO(response.content),
+                caption=f"✨ **8K Ultra Render:**\n`{user_prompt}`",
+                parse_mode="Markdown"
+            )
             await status_msg.delete()
         else:
-            await update.message.reply_photo(photo=image_url, caption=f"✨ `{clean_prompt}`", parse_mode="Markdown")
+            await update.message.reply_photo(
+                photo=image_url,
+                caption=f"✨ **8K Ultra Render:**\n`{user_prompt}`",
+                parse_mode="Markdown"
+            )
             await status_msg.delete()
+            
     except Exception as e:
         await status_msg.edit_text(f"इमेज जनरेशन त्रुटि: {str(e)}")
 
@@ -125,14 +166,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         config = types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
-            tools=[{"google_search": {}}]
+            tools=[{"google_search": {}}],
+            safety_settings=UNRESTRICTED_SAFETY
         )
         response = client.models.generate_content(
             model=CURRENT_MODEL,
             contents=history_contents,
             config=config
         )
-        reply_text = response.text or "कोई जवाब नहीं मिला।"
+        reply_text = response.text or "कोई प्रतिक्रिया नहीं मिली।"
 
         user_conversations[user_id].append({"role": "user", "text": user_text})
         user_conversations[user_id].append({"role": "model", "text": reply_text})
@@ -152,7 +194,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    caption = update.message.caption or "इस छवि का बारीक और स्पष्ट विश्लेषण करें।"
+    caption = update.message.caption or "इस छवि का बारीक और गहरा विश्लेषण करें।"
 
     photo = update.message.photo[-1]
     photo_file = await photo.get_file()
@@ -160,9 +202,14 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     image = Image.open(io.BytesIO(photo_bytes))
 
     try:
+        config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION,
+            safety_settings=UNRESTRICTED_SAFETY
+        )
         response = client.models.generate_content(
             model=CURRENT_MODEL,
-            contents=[image, caption]
+            contents=[image, caption],
+            config=config
         )
         await update.message.reply_text(response.text or "इमेज का विश्लेषण पूरा हुआ।")
     except Exception as e:
@@ -179,16 +226,21 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         audio_part = types.Part.from_bytes(data=bytes(audio_bytes), mime_type="audio/ogg")
+        config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION,
+            safety_settings=UNRESTRICTED_SAFETY
+        )
         response = client.models.generate_content(
             model=CURRENT_MODEL,
-            contents=[audio_part, "इस ऑडियो संदेश को सुनकर उपयुक्त और सटीक उत्तर दें।"]
+            contents=[audio_part, "इस ऑडियो संदेश को सुनकर बिना किसी रोक-टोक के सटीक उत्तर दें।"],
+            config=config
         )
         await update.message.reply_text(response.text or "ऑडियो प्रोसेस हो गया।")
     except Exception as e:
         await update.message.reply_text(f"वॉइस प्रोसेसिंग त्रुटि: {str(e)}")
 
 if __name__ == '__main__':
-    print(f"Executive Super-Agent स्टार्ट हो रहा है... Active Model: {CURRENT_MODEL}")
+    print(f"Executive Super-Agent (Ultra-Sharp) Live... Model: {CURRENT_MODEL}")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
