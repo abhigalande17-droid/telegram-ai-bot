@@ -1,11 +1,18 @@
 import os
 import json
-import asyncio
+import io
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 from google import genai
 from google.genai import types
+from PIL import Image
 
 load_dotenv()
 
@@ -15,10 +22,8 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_KEY)
 
-# Memory file path
 MEMORY_FILE = "bot_memory.json"
 
-# Persistent Memory Load & Save Functions
 def load_memory():
     if os.path.exists(MEMORY_FILE):
         try:
@@ -34,99 +39,160 @@ def save_memory(data):
 
 user_conversations = load_memory()
 
-# Dynamic Model Discovery (Live Google API se model list nikalna)
-def get_working_models():
-    default_order = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-3.8-flash"]
-    try:
-        models = [m.name.replace("models/", "") for m in client.models.list()]
-        flash_models = [m for m in models if "flash" in m and "preview" not in m]
-        return flash_models if flash_models else default_order
-    except Exception:
-        return default_order
+CURRENT_MODEL = "gemini-2.5-flash"
 
-ACTIVE_MODELS = get_working_models()
-CURRENT_MODEL = ACTIVE_MODELS[0]
+SYSTEM_INSTRUCTION = (
+    "You are an elite, highly intelligent Executive AI Super-Agent. "
+    "Provide razor-sharp, authentic, accurate, and deeply insightful answers. "
+    "Always maintain top clarity, concrete facts, and professional precision."
+)
+
+async def check_auth(update: Update) -> bool:
+    user = update.effective_user
+    if not user or user.id != ALLOWED_USER_ID:
+        if update.message:
+            await update.message.reply_text("⛔ अनधिकृत एक्सेस: आपको इस बॉट को उपयोग करने की अनुमति नहीं है।")
+        return False
+    return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    if int(user_id) != ALLOWED_USER_ID:
-        await update.message.reply_text("Maaf kijiye, aapko permission nahi hai.")
+    if not await check_auth(update):
         return
-    
+    user_id = str(update.effective_user.id)
     user_conversations[user_id] = []
     save_memory(user_conversations)
-    await update.message.reply_text("Namaste! Main aapka autonomous AI bot hoon. Humari saari baatcheet mujhe hamesha yaad rahegi.")
+    await update.message.reply_text(
+        "⚡ *Executive AI Super-Agent सक्रिय है!*\n\n"
+        "✨ **उपलब्ध सुपर-पावर्स:**\n"
+        "• 🌐 **Google Search:** लाइव और सटीक डेटा विश्लेषण\n"
+        "• 🎨 **इमेज जनरेशन:** `/image <प्रॉम्प्ट>` लिखकर HD फ़ोटो बनाएँ\n"
+        "• 👁️ **विज़न विश्लेषण:** कोई भी फ़ोटो या डिज़ाइन भेजें\n"
+        "• 🎙️ **वॉइस नोट्स:** बोलकर संदेश भेजें\n"
+        "• 🧠 **रोलिंग मेमोरी:** निरंतर संदर्भ याद रखेगा",
+        parse_mode="Markdown"
+    )
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global CURRENT_MODEL, ACTIVE_MODELS
-    user_id = str(update.effective_user.id)
+async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_auth(update):
+        return
     
-    if int(user_id) != ALLOWED_USER_ID:
+    prompt = " ".join(context.args) if context.args else ""
+    if not prompt:
+        await update.message.reply_text("कृपया प्रॉम्प्ट दें। उदाहरण:\n`/image A royal bespoke sherwani on mannequin, studio lighting`", parse_mode="Markdown")
         return
 
+    status_msg = await update.message.reply_text("🎨 अल्ट्रा-एचडी इमेज रेंडर हो रही है, कृपया प्रतीक्षा करें...")
+    
+    try:
+        result = client.models.generate_images(
+            model="imagen-3.0-generate-002",
+            prompt=prompt,
+            config=dict(
+                number_of_images=1,
+                aspect_ratio="1:1"
+            )
+        )
+        
+        if result.generated_images:
+            image_bytes = result.generated_images[0].image.image_bytes
+            await update.message.reply_photo(photo=io.BytesIO(image_bytes), caption=f"✨ `{prompt}`", parse_mode="Markdown")
+            await status_msg.delete()
+        else:
+            await status_msg.edit_text("इमेज तैयार नहीं हो सकी। कृपया दूसरा प्रॉम्प्ट आज़माएँ।")
+    except Exception as e:
+        await status_msg.edit_text(f"इमेज जनरेशन त्रुटि: {str(e)}")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_auth(update):
+        return
+
+    user_id = str(update.effective_user.id)
     user_text = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
     if user_id not in user_conversations:
         user_conversations[user_id] = []
 
-    # Format history for Gemini API
+    history = user_conversations[user_id][-10:]
     history_contents = []
-    for chat in user_conversations[user_id]:
-        role = "user" if chat["role"] == "user" else "model"
-        history_contents.append(
-            types.Content(role=role, parts=[types.Part.from_text(text=chat["text"])])
+    for turn in history:
+        history_contents.append(types.Content(role=turn["role"], parts=[types.Part.from_text(text=turn["text"])]))
+
+    history_contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_text)]))
+
+    try:
+        config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION,
+            tools=[{"google_search": {}}]
         )
+        response = client.models.generate_content(
+            model=CURRENT_MODEL,
+            contents=history_contents,
+            config=config
+        )
+        reply_text = response.text or "कोई जवाब नहीं मिला।"
 
-    # Current user message add karein
-    history_contents.append(
-        types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
-    )
-
-    reply_text = None
-    models_to_try = [CURRENT_MODEL] + [m for m in ACTIVE_MODELS if m != CURRENT_MODEL]
-
-    for model_name in models_to_try:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=history_contents,
-            )
-            reply_text = response.text
-
-            # Self-healing switch update
-            if model_name != CURRENT_MODEL:
-                print(f"[Auto-Switch] Naya active model select hua: {model_name}")
-                CURRENT_MODEL = model_name
-            break
-        except Exception as e:
-            print(f"[Model Failed: {model_name}] Error: {e}")
-            continue
-
-    if reply_text:
-        # Memory save karein
         user_conversations[user_id].append({"role": "user", "text": user_text})
         user_conversations[user_id].append({"role": "model", "text": reply_text})
-        
-        # Max last 14 messages preserve karein
-        if len(user_conversations[user_id]) > 14:
-            user_conversations[user_id] = user_conversations[user_id][-14:]
-            
         save_memory(user_conversations)
-    else:
-        reply_text = "Sabhi AI servers par load hai, kripya 10 second baad dobara poochein."
 
-    # Telegram message length limit handle
+    except Exception as e:
+        reply_text = f"त्रुटि: {str(e)}"
+
     if len(reply_text) > 4000:
         for i in range(0, len(reply_text), 4000):
             await update.message.reply_text(reply_text[i:i+4000])
     else:
         await update.message.reply_text(reply_text)
 
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_auth(update):
+        return
+
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    caption = update.message.caption or "इस छवि का बारीक और स्पष्ट विश्लेषण करें।"
+
+    photo = update.message.photo[-1]
+    photo_file = await photo.get_file()
+    photo_bytes = await photo_file.download_as_bytearray()
+    image = Image.open(io.BytesIO(photo_bytes))
+
+    try:
+        response = client.models.generate_content(
+            model=CURRENT_MODEL,
+            contents=[image, caption]
+        )
+        await update.message.reply_text(response.text or "इमेज का विश्लेषण पूरा हुआ।")
+    except Exception as e:
+        await update.message.reply_text(f"विज़न त्रुटि: {str(e)}")
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_auth(update):
+        return
+
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    voice = update.message.voice or update.message.audio
+    voice_file = await voice.get_file()
+    audio_bytes = await voice_file.download_as_bytearray()
+
+    try:
+        audio_part = types.Part.from_bytes(data=bytes(audio_bytes), mime_type="audio/ogg")
+        response = client.models.generate_content(
+            model=CURRENT_MODEL,
+            contents=[audio_part, "इस ऑडियो संदेश को सुनकर उपयुक्त और सटीक उत्तर दें।"]
+        )
+        await update.message.reply_text(response.text or "ऑडियो प्रोसेस हो गया।")
+    except Exception as e:
+        await update.message.reply_text(f"वॉइस प्रोसेसिंग त्रुटि: {str(e)}")
+
 if __name__ == '__main__':
-    print(f"Bot start ho raha hai... Default Model: {CURRENT_MODEL}")
+    print("Executive Super-Agent स्टार्ट हो रहा है...")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("image", generate_image))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
     
     app.run_polling()

@@ -3,3 +3,5 @@ langchain-ollama
 python-dotenv
 python-telegram-bot
 google-genai
+pillow
+requests
